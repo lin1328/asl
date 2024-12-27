@@ -1,0 +1,6 @@
+id=asl_dev
+name=Android Subsystem for GNU/Linux
+version=v1.0.4
+versionCode=202412
+author=lin7
+description=可能存在未知错误，不保证兼容所有机型
