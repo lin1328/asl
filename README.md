@@ -1,5 +1,6 @@
 <h2 align="center">Android Subsystem for GNU/Linux</h2>
 
+[![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)](https://images.linuxcontainers.org)
 [![Repo size](https://img.shields.io/github/repo-size/lin1328/asl?logo=github&logoColor=white)](https://github.com/lin1328/asl)
 
 > [!NOTE]

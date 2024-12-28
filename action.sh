@@ -1,6 +1,6 @@
 MODDIR=${0%/*}
 PORT=$(sed -n 's/^PORT=\([0-9]*\)$/\1/p' "$MODDIR/config.ini")
-PID=$("$MODDIR/bin/fuser" "$PORT/tcp" 2>/dev/null)
+PID=$(fuser "$PORT/tcp" 2>/dev/null)
 
 BATE() {
     local PREFIX="/data/user/0/com.termux/files/usr"

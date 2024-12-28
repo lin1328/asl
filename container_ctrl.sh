@@ -1,14 +1,9 @@
 #!/bin/sh
 
-init_setup() {
-    MODDIR=${0%/*}
-    export PATH="$MODDIR/bin:$PATH"
-    . "$MODDIR/config.ini"
-}
+MODDIR=${0%/*}
+. "$MODDIR/config.ini"
 
 ruriumount() {
-    init_setup
-
     # fuser -k "$LXC_OS_DIR" >/dev/null 2>&1  # 用于查找指定目录下的进程并终止这些进程
 
     PROCESS=$(ruri -P $LXC_OS_DIR)      # 若异常请更换另外一个函数或使用fuser
@@ -101,7 +96,7 @@ ruristart() {
     
     set -- $ARGS "$LXC_OS_DIR" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TERM=linux SHELL=/bin/sh LANG=en_US.UTF-8 /bin/sh -c "$START_SERVICES"
     
-    echo "- Command: ruri $(printf "%s " "$@")"
+    echo "- Command: ruri $(printf "%s " "$@")" > "$MODDIR/.command"
     
     ruri "$@" &
     # timeout 5s ruri "$@"

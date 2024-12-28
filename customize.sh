@@ -35,8 +35,8 @@ basefile() {
 link_busybox() {
     local busybox_file=""
 
-    if [ -f "$MODPATH/bin/busybox" ]; then
-        busybox_file="$MODPATH/bin/busybox"
+    if [ -f "$MODPATH/system/xbin/busybox" ]; then
+        busybox_file="$MODPATH/system/xbin/busybox"
     else
         for path in $BUSYBOX_PATHS; do
             if [ -f "$path" ]; then
@@ -47,12 +47,16 @@ link_busybox() {
     fi
 
     if [ -n "$busybox_file" ]; then
-        mkdir -p "$MODPATH/bin"
-        # "$busybox_file" --install -s "$MODPATH/bin"
+        mkdir -p "$MODPATH/system/xbin"
+        # "$busybox_file" --install -s "$MODPATH/system/xbin"
         # 这种方法会创建指向 BusyBox 所有命令的链接，因此不推荐使用。以下是一种替代方法，用于为特定命令创建指向 BusyBox 文件的符号链接
-        for cmd in fuser inotifyd timeout; do
-            ln -sf "$busybox_file" "$MODPATH/bin/$cmd"
+        for cmd in fuser xz gzip timeout; do
+            ln -sf "$busybox_file" "$MODPATH/system/xbin/$cmd"
         done
+
+        if ! inotifyd --help >/dev/null 2>&1; then
+            ln -sf "$busybox_file" "$MODPATH/system/xbin/inotifyd"
+        fi
     else
         abort "! 未找到可用的 Busybox 文件。请检查您的安装环境"
     fi
@@ -73,12 +77,10 @@ inotifyfile() {
 
 configuration() {
     # install -m 755 -o root -g root "$MODPATH/bin/ruri" /system/bin/
-    set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
+    set_perm_recursive "$MODPATH/system/xbin" 0 0 0755 0755
     . "$MODPATH/config.ini"
 
     BUSYBOX_PATHS="/data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox"
-
-    export PATH="$MODPATH/bin:$PATH"
 
     CONTAINER_DIR="/data/lxc/$LXC_OS"
     sed -i "s|^LXC_OS_DIR=.*|LXC_OS_DIR=$CONTAINER_DIR|" "$MODPATH/config.ini"

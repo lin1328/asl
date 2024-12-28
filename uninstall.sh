@@ -1,8 +1,6 @@
 MODDIR=${0%/*}
 "$MODDIR/container_ctrl.sh" stop
 
-sleep 2
-
 delete_container() {
     local LXC_OS_DIR=$(grep '^LXC_OS_DIR=' "$MODDIR/config.ini" | cut -d '=' -f 2)
 
