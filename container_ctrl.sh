@@ -14,7 +14,6 @@ ruriumount() {
     umount -lf "$CONTAINER_DIR/sys" 2>/dev/null
     umount -lf "$CONTAINER_DIR/proc" 2>/dev/null
     umount -lf "$CONTAINER_DIR/dev" 2>/dev/null
-    echo "- Container stopped"
     sleep 2
 }
 
@@ -59,7 +58,6 @@ ruristart() {
     [ "$RUNTIME" = "true" ] && ARGS="$ARGS -S"
 
     ruri $ARGS "$CONTAINER_DIR" /bin/sh -c "$START_SERVICES" &
-    echo "- Container started"
 }
 
 case "$1" in

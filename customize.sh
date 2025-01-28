@@ -1,6 +1,6 @@
 SKIPUNZIP=0
 
-ASL=
+ASL=""
 REPLACE="
 "
 bootinspect() {
@@ -38,7 +38,7 @@ link_busybox() {
             ln -sf "$busybox_file" "$MODPATH/system/xbin/$cmd"
         done
 
-        if ! inotifyd --help >/dev/null 2>&1; then
+        if ! command -v inotifyd >/dev/null 2>&1; then
             ln -sf "$busybox_file" "$MODPATH/system/xbin/inotifyd"
         fi
     else
@@ -134,5 +134,5 @@ main
 set_perm "$MODPATH/container_ctrl.sh" 0 0 0755
 
 ui_print ""
-(sleep 5 && reboot) &
-ui_print "The system will restart in 5 seconds..."
+(sleep 10 && reboot) &
+ui_print "The system will restart in 10 seconds..."
