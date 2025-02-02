@@ -7,17 +7,19 @@ configure_dns_host() {
     if [ -L /etc/resolv.conf ]; then
         rm -f /etc/resolv.conf
     fi
-    touch /etc/resolv.conf
-    echo "nameserver 1.1.1.1" > /etc/resolv.conf
-    echo "nameserver 114.114.114.114" >> /etc/resolv.conf
-    echo "nameserver 2606:4700:4700::1111" >> /etc/resolv.conf
+    cat > /etc/resolv.conf <<-'EOF'
+nameserver 1.1.1.1
+nameserver 114.114.114.114
+nameserver 2606:4700:4700::1111
+EOF
 
     if [ -L /etc/hosts ]; then
         rm -f /etc/hosts
     fi
-    touch /etc/hosts
-    echo "127.0.0.1 localhost" > /etc/hosts
-    echo "::1       localhost ip6-localhost ip6-loopback" >> /etc/hosts
+    cat > /etc/hosts <<-'End'
+127.0.0.1 localhost
+::1       localhost ip6-localhost ip6-loopback
+End
 }
 
 create_groups() {
@@ -137,46 +139,134 @@ add_user_to_groups() {
     usermod -g aid_inet _apt 2>/dev/null
 }
 
+fix_sudo_permissions() {
+    if [ -f /etc/sudoers ]; then
+        chown root:root /etc/sudoers
+        chmod 440 /etc/sudoers
+    fi
+
+    if [ -f /etc/sudo.conf ]; then
+        chown root:root /etc/sudo.conf
+        chmod 644 /etc/sudo.conf
+    fi
+
+    if [ -d /etc/sudoers.d ]; then
+        chown root:root /etc/sudoers.d
+        chmod 755 /etc/sudoers.d
+
+        find /etc/sudoers.d -type f -exec chown root:root {} \;
+        find /etc/sudoers.d -type f -exec chmod 440 {} \;
+
+        find /etc/sudoers.d -type d -exec chown root:root {} \;
+        find /etc/sudoers.d -type d -exec chmod 755 {} \;
+    fi
+
+    if [ -d /usr/libexec/sudo ]; then
+        chown -R root:root /usr/libexec/sudo
+        chmod -R 755 /usr/libexec/sudo
+
+        if [ -f /usr/libexec/sudo/sudoers.so ]; then
+            chown root:root /usr/libexec/sudo/sudoers.so
+            chmod 644 /usr/libexec/sudo/sudoers.so
+        fi
+    fi
+}
+
+add_user_with_sudo() {
+    local username="$1"
+
+    if id "$username" >/dev/null 2>&1; then
+        userdel -r "$username" 2>/dev/null
+        # userdel -r --force "$username"
+        if [ -d "/home/$username" ]; then
+            rm -rf "/home/$username"
+        fi
+    fi
+
+    if command -v bash >/dev/null 2>&1; then
+        useradd -m -s /bin/bash "$username"
+    else
+        useradd -m "$username"
+    fi
+
+    echo "$username:$username" | chpasswd
+
+    if grep -q "^%sudo" /etc/sudoers; then
+        usermod -aG sudo "$username"
+        echo "$username ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    elif grep -q "^%wheel" /etc/sudoers; then
+        usermod -aG wheel "$username"
+        echo "$username ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    else
+        echo "$username ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    fi
+
+    chown "$username:$username" "/home/$username"
+    chmod 700 "/home/$username"
+}
+
 setup_archlinux() {
+    # Disable CheckSpace (optional, use with caution is recommended)
     sed -i "/^CheckSpace/s/^/#/" /etc/pacman.conf
-    sed -i "/^#IgnorePkg/a\\IgnorePkg = linux-aarch64 linux-firmware" /etc/pacman.conf
+    if ! grep -q "^IgnorePkg = linux-aarch64 linux-firmware" /etc/pacman.conf; then
+        sed -i "/^#IgnorePkg/a\\IgnorePkg = linux-aarch64 linux-firmware" /etc/pacman.conf
+    fi
 
     cat > /etc/pacman.d/mirrorlist <<-'EndOfArchMirrors'
 # Archlinux arm
 Server = http://mirror.archlinuxarm.org/$arch/$repo
 # Server = https://mirrors.ustc.edu.cn/archlinuxarm/$arch/$repo
-# Server = https://mirrors.bfsu.edu.cn/archlinuxarm/$arch/$repo
 # Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-# Server = https://mirrors.163.com/archlinuxarm/$arch/$repo
+# Server = https://mirrors.bfsu.edu.cn/archlinuxarm/$arch/$repo
 EndOfArchMirrors
 
-    cat >>/etc/pacman.conf <<-'Endofpacman1'
+    cat > /etc/pacman.conf <<-'Endofpacman'
+[options]
+Architecture = aarch64
+LocalFileSigLevel = Optional
+ParallelDownloads = 5
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[community]
+Include = /etc/pacman.d/mirrorlist
+
+[alarm]
+Include = /etc/pacman.d/mirrorlist
+
+[aur]
+Include = /etc/pacman.d/mirrorlist
+
 [arch4edu]
 Server = https://mirrors.bfsu.edu.cn/arch4edu/$arch
 Server = https://mirrors.tuna.tsinghua.edu.cn/arch4edu/$arch
-Server = https://mirror.autisten.club/arch4edu/$arch
-Server = https://arch4edu.keybase.pub/$arch
 Server = https://mirror.lesviallon.fr/arch4edu/$arch
-Server = https://mirrors.tencent.com/arch4edu/$arch
 SigLevel = Never
-Endofpacman1
 
-    cat >>/etc/pacman.conf <<-'Endofpacman2'
 [archlinuxcn]
 Server = https://mirrors.bfsu.edu.cn/archlinuxcn/$arch
 Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
 Server = https://repo.archlinuxcn.org/$arch
 SigLevel = Never
-Endofpacman2
+Endofpacman
 
-    pacman-key --init
-    pacman-key --populate archlinuxarm
-    pacman -Sy --noconfirm archlinux-keyring archlinuxarm-keyring
+    if [ ! -d /etc/pacman.d/gnupg ]; then
+        pacman-key --init
+    fi
 
-    pacman -Rs linux-aarch64 linux-firmware --noconfirm
+    pacman-key --populate archlinux archlinuxarm
 
-    pacman -Syu --noconfirm
-    pacman -Sy --noconfirm --needed openssh
+    pacman -Sy --noconfirm --needed archlinux-keyring archlinuxarm-keyring
+
+    # Force or safely remove the kernel and firmware packages (if needed)
+    # pacman -Rdd linux-aarch64 linux-firmware --noconfirm
+    # pacman -Rs linux-aarch64 linux-firmware --noconfirm
+
+    pacman -Syu --noconfirm --needed openssh
 
     ln -sf /usr/local/lib/servicectl/serviced /usr/bin/serviced
     ln -sf /usr/local/lib/servicectl/servicectl /usr/bin/servicectl
@@ -186,67 +276,89 @@ Endofpacman2
     # When packaging a software package (such as an AUR package) using `makepkg`, you may encounter an issue where the system cannot enter the fakeroot environment because it is not started by systemd and does not have SYSV pipes and message queues
     # To resolve this issue, download the appropriate `fakeroot-tcp` for your system =>>https://pkgs.org/download/fakeroot-tcp
     # pacman -S --overwrite '*' yay     # It is necessary to compile `archlinuxcn-keyring` by yourself
+
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
 }
 
 setup_alpine() {
     apk update
-    apk add openrc openssh
+    apk add openrc openssh sudo shadow
 
     mkdir -p /run/openrc
     touch /run/openrc/softlevel
     openrc
 
     rc-service devfs start
-    rc-service dmesg start
 
     rc-update add sshd
-    rc-update add resolvconf default
+    # rc-update add resolvconf default
+
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
 }
 
 setup_centos() {
     yum update -y
-    yum install -y openssh-server
+    yum install -y openssh-server sudo
     yum clean all
 
     ln -sf /usr/local/lib/servicectl/serviced /usr/bin/serviced
     ln -sf /usr/local/lib/servicectl/servicectl /usr/bin/servicectl
 
     ssh-keygen -A
+
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
 }
 
 setup_debian() {
-    apt update
-    apt install -y openssh-server
-    apt autoclean
+    apt-get update
+    apt-get install -y openssh-server sudo
+    apt-get autoclean
+
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
 }
 
 setup_fedora() {
     dnf update -y
-    dnf install -y openssh-server
+    dnf install -y openssh-server sudo
     dnf clean all
 
     ln -sf /usr/local/lib/servicectl/serviced /usr/bin/serviced
     ln -sf /usr/local/lib/servicectl/servicectl /usr/bin/servicectl
 
     ssh-keygen -A
+
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
 }
 
 setup_kali() {
-    apt update
-    apt install -y openssh-server
-    apt autoclean
+    apt-get update
+    apt-get install -y openssh-server sudo
+    apt-get autoclean
 
-    # apt install kali-tools-top10
-    # apt install kali-linux-all
+    fix_sudo_permissions
+    add_user_with_sudo "$LXC_OS"
+
+    # apt-get install kali-tools-top10
+    # apt-get install kali-linux-all
 }
 
 configure_ssh() {
     local port=${PORT:-22}
 
+    if [ ! -f /etc/ssh/sshd_config ]; then
+        echo "File sshd_config does not exist"
+        exit 1
+    fi
+
     if grep -Eq "^#?\s*PermitRootLogin" /etc/ssh/sshd_config; then
-        sed -i 's/^#\?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/^#\?\s*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
     else
-        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+        echo "PermitRootLogin no" >> /etc/ssh/sshd_config
     fi
 
     if grep -Eq "^#?\s*PasswordAuthentication\s" /etc/ssh/sshd_config; then
@@ -261,11 +373,23 @@ configure_ssh() {
         echo "Port ${port}" >> /etc/ssh/sshd_config
     fi
 
+    # Close PAM certification (optional)
     if grep -Eq "^#?\s*UsePAM" /etc/ssh/sshd_config; then
-        sed -i 's/^#\?\s*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
+        sed -i 's/^#\?\s*UsePAM.*/UsePAM yes/' /etc/ssh/sshd_config
     else
-        echo "UsePAM no" >> /etc/ssh/sshd_config
+        echo "UsePAM yes" >> /etc/ssh/sshd_config
     fi
+
+    if grep -Eq "^#?\s*PermitTTY" /etc/ssh/sshd_config; then
+        sed -i '0,/^#\?\s*PermitTTY/s/^#\?\s*PermitTTY.*/PermitTTY yes/' /etc/ssh/sshd_config
+    else
+        echo "PermitTTY yes" >> /etc/ssh/sshd_config
+    fi
+
+    # Allow specified users (optional)
+    # echo "AllowUsers user1 user2" >> /etc/ssh/sshd_config
+
+    # systemctl restart sshd || service ssh restart
 }
 
 main() {
@@ -286,7 +410,7 @@ main() {
     configure_dns_host
     create_groups
     add_user_to_groups
-    echo "root:${PASSWORD:-123456}" | chpasswd
+    echo "root:${PASSWORD:-J@#KmMr0@10%&x?j}" | chpasswd
 
     case "$LXC_OS" in
     archlinux) setup_archlinux ;;
@@ -301,3 +425,5 @@ main() {
 }
 
 main
+
+exit $?

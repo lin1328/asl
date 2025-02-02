@@ -109,7 +109,9 @@ automatic() {
     cp -r "$MODPATH/setup/servicectl"/* "$CONTAINER_DIR/usr/local/lib/servicectl/"
     chmod 777 "$CONTAINER_DIR/tmp/setup.sh" "$CONTAINER_DIR/usr/local/lib/servicectl/servicectl" "$CONTAINER_DIR/usr/local/lib/servicectl/serviced"
 
-    ruri "$CONTAINER_DIR" /bin/sh /tmp/setup.sh "$RURIMA_LXC_OS" "$PASSWORD" "$PORT"
+    if ! ruri "$CONTAINER_DIR" /bin/sh /tmp/setup.sh "$RURIMA_LXC_OS" "$PASSWORD" "$PORT"; then
+      abort "Failed"
+    fi
     ruri -U "$CONTAINER_DIR"
 
     ui_print "- Automated installation completed!"

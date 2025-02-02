@@ -1,0 +1,91 @@
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'setup/setup.sh'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: archlinux
+            version: current
+          - os: alpine
+            version: edge
+          - os: centos
+            version: 9-Stream
+          - os: debian
+            version: bookworm
+          - os: fedora
+            version: 41
+          - os: kali
+            version: current
+          - os: ubuntu
+            version: oracular
+
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Install Compilation Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get --no-install-recommends -y install \
+            curl tar jq xz-utils build-essential libseccomp-dev libcap-dev libc6-dev binutils qemu-user-static
+
+      - name: Checkout Ruri repository
+        uses: actions/checkout@v4
+        with:
+          repository: moe-hacker/ruri
+          path: ruri
+          fetch-depth: 1
+
+      - name: Build ruri
+        run: |
+          cd ruri
+          ./configure -s
+          make
+          cd ..
+
+      - name: Download ${{ matrix.os }}
+        env:
+          OS: ${{ matrix.os }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          DOWNLOAD_URL=$(curl -s https://images.linuxcontainers.org/meta/simplestreams/v1/images.json | jq -r \
+            --arg os "$OS" \
+            --arg version "$VERSION" '
+            .products
+            | to_entries[]
+            | select(.key == "\($os):\($version):arm64:default")
+            .value.versions
+            | to_entries | sort_by(.key) | last
+            | .value.items["root.tar.xz"].path
+          ')
+
+          if [[ -z "$DOWNLOAD_URL" ]]; then
+            exit 1
+          fi
+
+          mkdir -p "$OS"
+          curl -s "https://images.linuxcontainers.org/$DOWNLOAD_URL" | tar -xJ -C "$OS"
+
+      - name: Testing for ${{ matrix.os }}
+        env:
+         OS: ${{ matrix.os }}
+        run: |
+          sudo chmod +x ruri/ruri setup/setup.sh
+          cp setup/setup.sh "$OS/tmp/setup.sh"
+
+          sudo ./ruri/ruri -a aarch64 -q /usr/bin/qemu-aarch64-static ./"$OS" /bin/sh /tmp/setup.sh "$OS"
+
+          sudo ./ruri/ruri -U "$GITHUB_WORKSPACE/$OS"
+
+          # sudo mount --bind "$GITHUB_WORKSPACE/$OS" "$GITHUB_WORKSPACE/$OS"
+          # sudo mount -o remount,suid "$GITHUB_WORKSPACE/$OS"
+
+          sudo ./ruri/ruri -p -a aarch64 -q /usr/bin/qemu-aarch64-static "$GITHUB_WORKSPACE/$OS" /bin/sh -c "su - $OS && sudo whoami"
