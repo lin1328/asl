@@ -1,6 +1,7 @@
 <h2 align="center">Android Subsystem for GNU/Linux</h2>
 
 [![Repo size](https://img.shields.io/github/repo-size/Moe-hacker/asl?logo=github&logoColor=white)](https://github.com/Moe-hacker/asl)
+[![TEST](https://github.com/lin1328/asl/actions/workflows/Test.yml/badge.svg)](https://github.com/lin1328/asl/actions/workflows/Test.yml)
 
 <details>
 <summary><strong>Currently Supported Systems</strong></summary>

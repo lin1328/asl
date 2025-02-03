@@ -3,6 +3,7 @@ name: Build release
 on:
   workflow_dispatch:
   push:
+    branches: [ "main" ]
     tags:
       - "v*"
 
@@ -10,6 +11,11 @@ jobs:
   fetch_latest_version:
     name: Fetch Latest Version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.fetch_and_configure.outputs.version }}
+      release_name: ${{ steps.fetch_and_configure.outputs.release_name }}
+      build_time: ${{ steps.fetch_and_configure.outputs.build_time }}
+      can_release: ${{ steps.fetch_and_configure.outputs.can_release }}
     steps:
       - name: Install curl and jq
         run: |
@@ -39,11 +45,6 @@ jobs:
           else
             echo "can_release=false" >> $GITHUB_OUTPUT
           fi
-    outputs:
-      version: ${{ steps.fetch_and_configure.outputs.version }}
-      release_name: ${{ steps.fetch_and_configure.outputs.release_name }}
-      build_time: ${{ steps.fetch_and_configure.outputs.build_time }}
-      can_release: ${{ steps.fetch_and_configure.outputs.can_release }}
 
   build:
     name: Build
@@ -100,8 +101,9 @@ jobs:
     name: Release
     needs: [fetch_latest_version, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: |
-      # (github.event_name == 'workflow_dispatch' && needs.fetch_latest_version.outputs.can_release == 'true') ||
       (github.event_name == 'workflow_dispatch' && needs.fetch_latest_version.outputs.can_release) ||
       startsWith(github.ref, 'refs/tags/')
     steps:
@@ -116,6 +118,8 @@ jobs:
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.fetch_latest_version.outputs.version }}
           name: ${{ needs.fetch_latest_version.outputs.release_name }}
