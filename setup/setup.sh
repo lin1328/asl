@@ -140,6 +140,13 @@ add_user_to_groups() {
 }
 
 fix_sudo_permissions() {
+    for dir in /etc /run /var/lib /var/log; do
+        if [ -d "$dir" ]; then
+            sudo chown -R root:root "$dir"
+            sudo chmod 755 "$dir"
+        fi
+    done
+
     if [ -f /etc/sudoers ]; then
         chown root:root /etc/sudoers
         chmod 440 /etc/sudoers
@@ -265,6 +272,7 @@ Endofpacman
     # Force or safely remove the kernel and firmware packages (if needed)
     # pacman -Rdd linux-aarch64 linux-firmware --noconfirm
     # pacman -Rs linux-aarch64 linux-firmware --noconfirm
+    # pacman -S --force filesystem
 
     pacman -Syu --noconfirm --needed openssh
 

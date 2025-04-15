@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-arm
     strategy:
       matrix:
         include:
@@ -26,6 +26,9 @@ jobs:
             version: current
           - os: ubuntu
             version: oracular
+      env:
+        OS: ${{ matrix.os }}
+        VERSION: ${{ matrix.version }}
 
     steps:
       - name: Checkout current repository
@@ -35,7 +38,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get --no-install-recommends -y install \
-            curl tar jq xz-utils build-essential libseccomp-dev libcap-dev libc6-dev binutils qemu-user-static
+            curl tar jq xz-utils autoconf automake libtool pkg-config build-essential libseccomp-dev libcap-dev libc6-dev binutils
 
       - name: Checkout Ruri repository
         uses: actions/checkout@v4
@@ -47,14 +50,11 @@ jobs:
       - name: Build ruri
         run: |
           cd ruri
-          ./configure -s
+          autoreconf -fiv
+          ./configure --enable-static
           make
-          cd ..
 
       - name: Download ${{ matrix.os }}
-        env:
-          OS: ${{ matrix.os }}
-          VERSION: ${{ matrix.version }}
         run: |
           DOWNLOAD_URL=$(curl -s https://images.linuxcontainers.org/meta/simplestreams/v1/images.json | jq -r \
             --arg os "$OS" \
@@ -75,17 +75,15 @@ jobs:
           curl -s "https://images.linuxcontainers.org/$DOWNLOAD_URL" | tar -xJ -C "$OS"
 
       - name: Testing for ${{ matrix.os }}
-        env:
-         OS: ${{ matrix.os }}
         run: |
           sudo chmod +x ruri/ruri setup/setup.sh
           cp setup/setup.sh "$OS/tmp/setup.sh"
 
-          sudo ./ruri/ruri -a aarch64 -q /usr/bin/qemu-aarch64-static ./"$OS" /bin/sh /tmp/setup.sh "$OS"
+          sudo ./ruri/ruri ./"$OS" /bin/sh /tmp/setup.sh "$OS"
 
           sudo ./ruri/ruri -U "$GITHUB_WORKSPACE/$OS"
 
           # sudo mount --bind "$GITHUB_WORKSPACE/$OS" "$GITHUB_WORKSPACE/$OS"
           # sudo mount -o remount,suid "$GITHUB_WORKSPACE/$OS"
 
-          sudo ./ruri/ruri -p -a aarch64 -q /usr/bin/qemu-aarch64-static "$GITHUB_WORKSPACE/$OS" /bin/sh -c "su - $OS && sudo whoami"
+          sudo ./ruri/ruri "$GITHUB_WORKSPACE/$OS" /bin/sh -c "su - $OS && sudo whoami && uname -m"
