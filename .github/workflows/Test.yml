@@ -26,9 +26,10 @@ jobs:
             version: current
           - os: ubuntu
             version: oracular
-      env:
-        OS: ${{ matrix.os }}
-        VERSION: ${{ matrix.version }}
+
+    env:
+      OS: ${{ matrix.os }}
+      VERSION: ${{ matrix.version }}
 
     steps:
       - name: Checkout current repository

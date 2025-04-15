@@ -140,12 +140,12 @@ add_user_to_groups() {
 }
 
 fix_sudo_permissions() {
-    for dir in /etc /run /var/lib /var/log; do
-        if [ -d "$dir" ]; then
-            sudo chown -R root:root "$dir"
-            sudo chmod 755 "$dir"
-        fi
-    done
+    # for dir in /etc /run /var/lib /var/log; do
+    #     if [ -d "$dir" ]; then
+    #         sudo chown -R root:root "$dir"
+    #         sudo chmod 755 "$dir"
+    #     fi
+    # done
 
     if [ -f /etc/sudoers ]; then
         chown root:root /etc/sudoers
