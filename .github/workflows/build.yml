@@ -3,7 +3,7 @@ name: Build release
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    # branches: ["main"]
     tags:
       - "v*"
 
@@ -17,11 +17,6 @@ jobs:
       build_time: ${{ steps.fetch_and_configure.outputs.build_time }}
       can_release: ${{ steps.fetch_and_configure.outputs.can_release }}
     steps:
-      - name: Install curl and jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl jq
-
       - name: Configure Variables
         id: fetch_and_configure
         run: |
@@ -61,34 +56,27 @@ jobs:
           - os: debian
             version: bookworm
           - os: fedora
-            version: 41
+            version: 42
           - os: kali
             version: current
           - os: ubuntu
             version: oracular
+
+    env:
+      OS: ${{ matrix.os }}
+      VERSION: ${{ matrix.version }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y zip
-
       - name: Package for OS ${{ matrix.os }} Version ${{ matrix.version }}
-        env:
-          OS: ${{ matrix.os }}
-          VERSION: ${{ matrix.version }}
         run: |
-          sed -i "s|^RURIMA_LXC_OS=.*|RURIMA_LXC_OS=$OS|g" config.conf
-          sed -i "s|^RURIMA_LXC_OS_VERSION=.*|RURIMA_LXC_OS_VERSION=$VERSION|g" config.conf
+          cd Module
+          sed -i "s|^LXC_OS=.*|LXC_OS=$OS|g" config.conf
+          sed -i "s|^LXC_OS_VERSION=.*|LXC_OS_VERSION=$VERSION|g" config.conf
           sed -i "s|^CONTAINER_DIR=.*|CONTAINER_DIR=/data/$OS|g" config.conf
 
-          zip -r "./asl-$OS-$VERSION.zip" . -x \
-              "*.git/*" \
-              ".github/*" \
-              "update.json" \
-              "changelog.md"
+          zip -r "../asl-$OS-$VERSION.zip" .
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -115,6 +103,13 @@ jobs:
       - name: Move Artifacts
         run: |
           find ./artifacts -type f -name "*.zip" -exec mv {} ./ \;
+
+      - name: Update Artifacts
+        run: |
+          cd Module
+          rm -f config.conf
+          sed -i 's/^ASL=""/ASL="1"/' customize.sh
+          zip -r "../asl.zip" .
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2

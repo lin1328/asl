@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'setup/setup.sh'
+      - "Module/setup/setup.sh"
 
 jobs:
   test:
-    runs-on: ubuntu-22.04-arm
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         include:
@@ -21,7 +21,7 @@ jobs:
           - os: debian
             version: bookworm
           - os: fedora
-            version: 41
+            version: 42
           - os: kali
             version: current
           - os: ubuntu
@@ -32,26 +32,17 @@ jobs:
       VERSION: ${{ matrix.version }}
 
     steps:
-      - name: Checkout current repository
-        uses: actions/checkout@v4
-
       - name: Install Compilation Toolchain
         run: |
           sudo apt-get update
           sudo apt-get --no-install-recommends -y install \
             curl tar jq xz-utils autoconf automake libtool pkg-config build-essential libseccomp-dev libcap-dev libc6-dev binutils
 
-      - name: Checkout Ruri repository
-        uses: actions/checkout@v4
-        with:
-          repository: moe-hacker/ruri
-          path: ruri
-          fetch-depth: 1
-
       - name: Build ruri
         run: |
+          git clone --depth 1 https://github.com/moe-hacker/ruri.git
           cd ruri
-          autoreconf -fiv
+          ./autogen.sh
           ./configure --enable-static
           make
 
@@ -77,8 +68,9 @@ jobs:
 
       - name: Testing for ${{ matrix.os }}
         run: |
-          sudo chmod +x ruri/ruri setup/setup.sh
-          cp setup/setup.sh "$OS/tmp/setup.sh"
+          wget https://raw.githubusercontent.com/lin1328/asl/main/Module/setup/setup.sh
+          sudo chmod +x ruri/ruri setup.sh
+          cp setup.sh "$OS/tmp/setup.sh"
 
           sudo ./ruri/ruri ./"$OS" /bin/sh /tmp/setup.sh "$OS"
 
