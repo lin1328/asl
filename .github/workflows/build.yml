@@ -2,96 +2,126 @@ name: Build release
 
 on:
   workflow_dispatch:
-    inputs:
-      asl_version:
-        description: "Optional: asl version to use as tag_name (leave blank to use the latest remote version)"
-        required: false
-      release_name:
-        description: "Optional: Custom release name (asl v* release)"
-        required: false
   push:
-    branches: [ "main" ]
-  pull_request:
+    # branches: ["main"]
+    tags:
+      - "v*"
 
 jobs:
-  check_update:
-    name: Check update
+  fetch_latest_version:
+    name: Fetch Latest Version
     runs-on: ubuntu-latest
-    steps:
-      - name: Check latest version
-        id: check_version
-        run: |
-          remote_version=$(curl -L https://api.github.com/repos/Moe-hacker/asl/releases/latest | jq -r .tag_name)
-          remote_name=$(curl -L https://api.github.com/repos/Moe-hacker/asl/releases/latest | jq -r .name)
-          echo "remote_version=$remote_version" | tee -a $GITHUB_OUTPUT
-          echo "remote_name=$remote_name" | tee -a $GITHUB_OUTPUT
     outputs:
-      remote_version: ${{ steps.check_version.outputs.remote_version }}
-      remote_name: ${{ steps.check_version.outputs.remote_name }}
+      version: ${{ steps.fetch_and_configure.outputs.version }}
+      release_name: ${{ steps.fetch_and_configure.outputs.release_name }}
+      build_time: ${{ steps.fetch_and_configure.outputs.build_time }}
+      can_release: ${{ steps.fetch_and_configure.outputs.can_release }}
+    steps:
+      - name: Configure Variables
+        id: fetch_and_configure
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            version="${{ github.ref_name }}"
+            release_name="${{ github.ref_name }} Release"
+          else
+            response=$(curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -L "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+            version=$(echo "$response" | jq -r .tag_name)
+            release_name=$(echo "$response" | jq -r .name)
+          fi
+
+          build_time=$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')
+
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "release_name=$release_name" >> $GITHUB_OUTPUT
+          echo "build_time=$build_time" >> $GITHUB_OUTPUT
+
+          if [[ -n "$version" && "$version" != "null" && -n "$release_name" && "$release_name" != "null" ]]; then
+            echo "can_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "can_release=false" >> $GITHUB_OUTPUT
+          fi
 
   build:
     name: Build
-    needs: check_update
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: archlinux
+            version: current
+          - os: alpine
+            version: edge
+          - os: centos
+            version: 9-Stream
+          - os: debian
+            version: bookworm
+          - os: fedora
+            version: 42
+          - os: kali
+            version: current
+          - os: ubuntu
+            version: oracular
+
+    env:
+      OS: ${{ matrix.os }}
+      VERSION: ${{ matrix.version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Package for OS ${{ matrix.os }} Version ${{ matrix.version }}
+        run: |
+          cd Module
+          sed -i "s|^LXC_OS=.*|LXC_OS=$OS|g" config.conf
+          sed -i "s|^LXC_OS_VERSION=.*|LXC_OS_VERSION=$VERSION|g" config.conf
+          sed -i "s|^CONTAINER_DIR=.*|CONTAINER_DIR=/data/$OS|g" config.conf
+
+          zip -r "../asl-$OS-$VERSION.zip" .
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asl-${{ matrix.os }}-${{ matrix.version }}
+          path: ./asl-${{ matrix.os }}-${{ matrix.version }}.zip
+          retention-days: 7
+
+  release:
+    name: Release
+    needs: [fetch_latest_version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: |
+      (github.event_name == 'workflow_dispatch' && needs.fetch_latest_version.outputs.can_release) ||
+      startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Set env
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [ -n "${{ github.event.inputs.asl_version }}" ]; then
-              echo "version=${{ github.event.inputs.asl_version }}" | tee -a $GITHUB_ENV
-            else
-              echo "version=${{ needs.check_update.outputs.remote_version }}" | tee -a $GITHUB_ENV
-            fi
-
-            if [ -n "${{ github.event.inputs.release_name }}" ]; then
-              echo "release_name=${{ github.event.inputs.release_name }}" | tee -a $GITHUB_ENV
-            elif [ -n "${{ github.event.inputs.asl_version }}" ]; then
-              echo "release_name=${{ github.event.inputs.asl_version }}" | tee -a $GITHUB_ENV
-            else
-              echo "release_name=${{ needs.check_update.outputs.remote_name }}" | tee -a $GITHUB_ENV
-            fi
-          else
-            echo "version=${{ needs.check_update.outputs.remote_version }}" | tee -a $GITHUB_ENV
-            echo "release_name=${{ needs.check_update.outputs.remote_name }}" | tee -a $GITHUB_ENV
-          fi
-          echo "build_time=$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')" | tee -a $GITHUB_ENV
-
       - uses: actions/checkout@v4
-      - name: Build-Release
-        run: |
-          sudo apt update
-          sudo apt install -y zip
 
-          container_zip() {
-            local os=$1
-            local version=$2
-
-            sed -i "s/^RURIMA_LXC_OS=.*/RURIMA_LXC_OS=${os}/g" config.conf
-            sed -i "s/^RURIMA_LXC_OS_VERSION=.*/RURIMA_LXC_OS_VERSION=${version}/g" config.conf
-            sed -i "s#^CONTAINER_DIR=.*#CONTAINER_DIR=/data/${os}#g" config.conf
-
-            zip -r "../asl-${os}-${version}.zip" . -x "*.git/*" -x ".github/*"
-
-            echo "asl-${os}-${version}.zip"
-          }
-
-          container_zip "archlinux" "current"
-          container_zip "alpine" "edge"
-          container_zip "centos" "9-Stream"
-          container_zip "debian" "bookworm"
-          container_zip "fedora" "42"
-          container_zip "kali" "current"
-          container_zip "ubuntu" "oracular"
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Download All Build Artifacts
+        uses: actions/download-artifact@v4
         with:
-          tag_name: ${{ env.version }}
-          name: ${{ env.release_name }}
+          path: ./artifacts
+
+      - name: Move Artifacts
+        run: |
+          find ./artifacts -type f -name "*.zip" -exec mv {} ./ \;
+
+      - name: Update Artifacts
+        run: |
+          cd Module
+          rm -f config.conf
+          sed -i 's/^ASL=""/ASL="1"/' customize.sh
+          zip -r "../asl.zip" .
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.fetch_latest_version.outputs.version }}
+          name: ${{ needs.fetch_latest_version.outputs.release_name }}
           body: |
             You can only install one of these modules.
           prerelease: false
           files: |
-            ${{ github.workspace }}/../asl-*.zip
+            ./*.zip
