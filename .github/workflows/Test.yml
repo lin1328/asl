@@ -1,0 +1,82 @@
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Module/setup/setup.sh"
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        include:
+          - os: archlinux
+            version: current
+          - os: alpine
+            version: edge
+          - os: centos
+            version: 10-Stream
+          - os: debian
+            version: forky
+          - os: fedora
+            version: 43
+          - os: kali
+            version: current
+          - os: ubuntu
+            version: questing
+
+    env:
+      OS: ${{ matrix.os }}
+      VERSION: ${{ matrix.version }}
+
+    steps:
+      - name: Install Compilation Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get --no-install-recommends -y install \
+            curl tar jq xz-utils autoconf automake libtool pkg-config build-essential libseccomp-dev libcap-dev libc6-dev binutils
+
+      - name: Build ruri
+        run: |
+          git clone --depth 1 https://github.com/moe-hacker/ruri.git
+          cd ruri
+          ./autogen.sh
+          ./configure --enable-static
+          make
+
+      - name: Download ${{ matrix.os }}
+        run: |
+          DOWNLOAD_URL=$(curl -s https://images.linuxcontainers.org/meta/simplestreams/v1/images.json | jq -r \
+            --arg os "$OS" \
+            --arg version "$VERSION" '
+            .products
+            | to_entries[]
+            | select(.key == "\($os):\($version):arm64:default")
+            .value.versions
+            | to_entries | sort_by(.key) | last
+            | .value.items["root.tar.xz"].path
+          ')
+
+          if [[ -z "$DOWNLOAD_URL" ]]; then
+            exit 1
+          fi
+
+          mkdir -p "$OS"
+          curl -s "https://images.linuxcontainers.org/$DOWNLOAD_URL" | tar -xJ -C "$OS"
+
+      - name: Testing for ${{ matrix.os }}
+        run: |
+          wget https://raw.githubusercontent.com/lin1328/asl/main/Module/setup/setup.sh
+          sudo chmod +x ruri/ruri setup.sh
+          cp setup.sh "$OS/tmp/setup.sh"
+
+          sudo ./ruri/ruri ./"$OS" /bin/sh /tmp/setup.sh "$OS"
+
+          sudo ./ruri/ruri -U "$GITHUB_WORKSPACE/$OS"
+
+          # sudo mount --bind "$GITHUB_WORKSPACE/$OS" "$GITHUB_WORKSPACE/$OS"
+          # sudo mount -o remount,suid "$GITHUB_WORKSPACE/$OS"
+
+          sudo ./ruri/ruri "$GITHUB_WORKSPACE/$OS" /bin/sh -c "su - $OS && sudo whoami && uname -m"

@@ -1,0 +1,7 @@
+id=asl
+name=Android Subsystem for GNU/Linux
+version=v1.0.6
+versionCode=260225
+author=Moe-hacker & Lin1328
+description=Android Subsystem for GNU/Linux Powered by ruri
+updateJson=https://raw.githubusercontent.com/lin1328/asl/main/update.json

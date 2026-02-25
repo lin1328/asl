@@ -1,6 +1,7 @@
 <h2 align="center">Android Subsystem for GNU/Linux</h2>
 
 [![Repo size](https://img.shields.io/github/repo-size/Moe-hacker/asl?logo=github&logoColor=white)](https://github.com/Moe-hacker/asl)
+[![TEST](https://github.com/lin1328/asl/actions/workflows/Test.yml/badge.svg)](https://github.com/lin1328/asl/actions/workflows/Test.yml)
 
 <details>
 <summary><strong>Currently Supported Systems</strong></summary>
@@ -12,22 +13,22 @@
   - `edge`
 - centos
   - `9-Stream`
+  - `10-Stream`
 - debian
-  - `bookworm`
   - bullseye
-  - buster
+  - `bookworm`
   - trixie
+  - forky
 - fedora
   - 39
-  - 40
-  - `41`
+  - `43`
 - kali
   - `current`
 - ubuntu
   - focal
   - `jammy`
   - noble
-  - `oracular`
+  - `questing`
 
 </details>
 
@@ -37,9 +38,13 @@
 > - If there are any bugs, please report them. Compatibility with all devices is not guaranteed
 > - If you install the module twice, it will backup old container_dir and install a new container
 > - you can install multipe OS by changeing the module id and ssh port, but this action not supported officially
+
 ## How to connect
-Use port 22, user root and password 123456 by default,          
-but, please change the password once you connected to the container, and it's better to use ssh key instead of password login, note that please do not expose the ssh port to the pubnet.       
+> [!IMPORTANT]
+> The default port is 22, and both the username and password are the system name. For example, "archlinux",          
+> The default root user password is `J@#KmMr0@10%&x?j`, but SSH login for the root user is disabled.        
+> You can also set a custom password in the `.conf` file      
+> but, please change the password once you connected to the container, and it's better to use ssh key instead of password login, note that please do not expose the ssh port to the pubnet.       
 ## About the Binary
 
 ### Powered by ruri
@@ -49,17 +54,20 @@ but, please change the password once you connected to the container, and it's be
 - The `file` and `curl` command are fake, they actually calls `file-static` and `curl-static` with corrected args
 - Thanks: https://github.com/stunnel/static-curl for curl static binary
 
-> [!WARNING]
+> [!CAUTION]
 > Please change the default SSH password immediately  
 > Exposing a SSH port without key-based authentication is always a high-risk action!
 >
 > 请修改默认密码，暴露非密钥认证而是密码认证的ssh端口无论何时都是高危行为！
 
+> [!TIP]
+> By default, you can configure the password and port in the configuration file. For ruri configuration, please refer to [ruri project](https://github.com/Moe-hacker/ruri).
+
 ---
 
 ## Thanks
 
-- GitHub: [Lin1328](https://github.com/Lin1328) for the module framework
+- GitHub: [linqi](https://github.com/Lin1328) for the module framework
 - Coolapk: 望月古川 for additional framework support
 - GitHub: [stunnel](https://github.com/stunnel) for the curl static binary
 
